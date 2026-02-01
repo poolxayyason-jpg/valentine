@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>𝑭𝒐𝒓 𝑨𝒎𝒍𝒊𝒏</title>
+
+<style>
+html,body{height:100%;margin:0;background:#050b14;overflow:hidden;font-family:"Times New Roman",serif}
+canvas{position:fixed;inset:0;width:100%;height:100%}
+.hud{position:fixed;top:0;left:0;right:0;z-index:5;display:flex;justify-content:center;padding:22px 12px;pointer-events:none}
+.title{
+  font-size:56px;font-weight:normal;color:#fff;letter-spacing:.04em;
+  text-shadow:0 0 8px rgba(255,255,255,.6),
+              0 0 20px rgba(255,190,220,.35),
+              0 0 40px rgba(190,120,255,.25);
+}
+.hint{position:fixed;bottom:10px;left:0;right:0;text-align:center;font-size:12px;color:rgba(255,255,255,.55);pointer-events:none}
+</style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+<div class="hud"><div class="title">𝑭𝒐𝒓 𝑨𝒎𝒍𝒊𝒏</div></div>
+<div class="hint">แตะหน้าจอเพื่อเพิ่มหัวใจ</div>
+
+<script>
+(()=>{
+const c=document.getElementById("c");
+const ctx=c.getContext("2d");
+const DPR=Math.min(2,devicePixelRatio||1);
+let W,H;
+
+const rand=(a,b)=>a+Math.random()*(b-a);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+
+function resize(){
+  W=innerWidth;H=innerHeight;
+  c.width=W*DPR;c.height=H*DPR;
+  c.style.width=W+"px";c.style.height=H+"px";
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+addEventListener("resize",()=>{resize();resetBouquet();},{passive:true});
+resize();
+
+/* ===== Stars ===== */
+const stars=[...Array(260)].map(()=>({
+  x:Math.random(),y:Math.random(),
+  r:rand(.4,1.7),a:rand(.06,.30),
+  sp:rand(.6,1.8),ph:rand(0,Math.PI*2)
+}));
+
+/* ===== Hearts + rings ===== */
+const hearts=[];
+function spawnHeart(x=rand(0,W),y=H+30){
+  hearts.push({
+    x,y,vx:rand(-.18,.18),vy:rand(-1.6,-.9),
+    t:0,life:rand(5,7),s:rand(.7,1.25),
+    ring:true,r1:rand(16,34),r2:Math.random()<.45
+  });
+}
+addEventListener("pointerdown",e=>{
+  for(let i=0;i<7;i++)spawnHeart(e.clientX+rand(-18,18),e.clientY+rand(-12,12));
+},{passive:true});
+
+function drawHeart(h,a){
+  ctx.save();
+  ctx.translate(h.x,h.y);
+  ctx.scale(h.s,h.s);
+  ctx.globalAlpha=a;
+  ctx.beginPath();
+  ctx.moveTo(0,-8);
+  ctx.bezierCurveTo(7,-15,20,-6,0,14);
+  ctx.bezierCurveTo(-20,-6,-7,-15,0,-8);
+  ctx.closePath();
+  const g=ctx.createRadialGradient(0,-3,2,0,0,18);
+  g.addColorStop(0,"rgba(255,210,235,1)");
+  g.addColorStop(1,"rgba(255,55,125,1)");
+  ctx.fillStyle=g;ctx.fill();
+  ctx.restore();
+}
+
+/* ===== Lily bouquet (photo-like) ===== */
+const lilies=[];
+
+/* โทนสี: ขาว + ชมพู + ม่วง (เหมือนเดิม) แต่ทำให้เป็น “พาสเทลลิลลี่จริง” */
+const palettes=[
+  {p1:"#ffffff", p2:"#f2e9f1", vein:"rgba(160,120,150,.35)"}, // white
+  {p1:"#ffd3e8", p2:"#f3a9cf", vein:"rgba(200,90,140,.38)"},  // pink
+  {p1:"#eadcff", p2:"#bfa0ff", vein:"rgba(155,110,220,.38)"}  // purple
+];
+
+function spawnLily(x,base,depth,pal){
+  lilies.push({
+    x,base,depth,pal,
+    g:0,
+    stem:rand(190,270)*(0.92+depth*0.08),
+    size:rand(32,48)*(0.92+depth*0.10),  // ใหญ่ขึ้นเหมือนรูปถ่าย
+    sway:rand(0,Math.PI*2),
+    tilt:rand(-0.16,0.16),
+    bud: Math.random() < 0.35,           // เพิ่มดอกตูม
+    bloomRot: rand(0,Math.PI*2)
+  });
+}
+
+function resetBouquet(){
+  lilies.length=0;
+  const cx=W/2;
+  const base=H-28;
+
+  const total=22;                         // ช่อแน่นขึ้น
+  const rx=Math.min(120, W*0.26);         // บีบให้เป็นพุ่มเดียว
+  const ry=38;
+
+  for(let i=0;i<total;i++){
+    const depth = i<7 ? 0 : (i<15 ? 1 : 2);
+
+    // ให้รวมเป็นช่อเดียว (วงรี)
+    const ang = rand(0, Math.PI*2);
+    const rad = Math.sqrt(Math.random()) * (0.55 + depth*0.18);
+    const x = cx + Math.cos(ang)*rx*rad + rand(-8,8);
+    const b = base + Math.sin(ang)*ry*rad;
+
+    // แจกสี: ขาวเยอะหน่อย แล้วชมพู/ม่วงแทรก
+    const r = Math.random();
+    const pal = r < 0.45 ? 0 : (r < 0.75 ? 1 : 2);
+
+    spawnLily(x,b,depth,pal);
+  }
+
+  lilies.sort((a,b)=>a.depth-b.depth);
+}
+resetBouquet();
+
+/* ใบ/พุ่มฐานให้เหมือน “กอใบแน่น” */
+function drawFoliageBase(t){
+  const cx=W/2, by=H-12;
+  ctx.save();
+  ctx.globalAlpha=0.62;
+
+  const blades=32; // ใบเยอะขึ้น
+  for(let i=0;i<blades;i++){
+    const a=(i/blades)*Math.PI + Math.sin(t*0.45+i)*0.07;
+    const len=125 + 45*Math.sin(t*0.6+i);
+    const bend=45 + 12*Math.sin(t*0.9+i);
+    const x1=cx + Math.cos(a)*8;
+    const y1=by;
+    const x2=cx + Math.cos(a)*len;
+    const y2=by - Math.sin(a)*len*0.9;
+
+    ctx.strokeStyle="rgba(20,185,115,.75)";
+    ctx.lineWidth=3;
+    ctx.beginPath();
+    ctx.moveTo(x1,y1);
+    ctx.quadraticCurveTo(cx, by-bend, x2, y2);
+    ctx.stroke();
+  }
+
+  // เงาก้อนพุ่มด้านล่าง
+  ctx.globalAlpha=0.20;
+  const g=ctx.createRadialGradient(cx, H-20, 10, cx, H-20, 230);
+  g.addColorStop(0,"rgba(0,0,0,0)");
+  g.addColorStop(1,"rgba(0,0,0,.85)");
+  ctx.fillStyle=g;
+  ctx.beginPath();
+  ctx.ellipse(cx, H-20, 230, 115, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+/* วาด “ลิลลี่เหมือนรูป” (กลีบอวบ + เกสร + จุด + ดอกตูม) */
+function drawLily(L,t){
+  // ค่อยๆขึ้น
+  L.g = clamp(L.g + 0.010, 0, 1);
+  const g=L.g;
+
+  const sway = Math.sin(t*0.9 + L.sway) * 0.06;
+  const h = L.stem * g;
+
+  ctx.save();
+  ctx.translate(L.x, L.base);
+  ctx.rotate(L.tilt + sway);
+
+  // ก้าน
+  ctx.globalAlpha=1;
+  ctx.lineCap="round";
+  ctx.lineWidth=4 + L.depth;
+  ctx.strokeStyle="rgba(35,195,125,.95)";
+  ctx.beginPath();
+  ctx.moveTo(0,0);
+  ctx.quadraticCurveTo(10,-h*0.55,0,-h);
+  ctx.stroke();
+
+  // ใบข้างก้าน
+  const leafY = -h*0.55;
+  ctx.fillStyle="rgba(16,155,95,.95)";
+  ctx.strokeStyle="rgba(10,110,70,.9)";
+  ctx.lineWidth=2;
+
+  function leaf(dir, scale){
+    const w=36*g*scale, hh=22*g*scale;
+    ctx.save();
+    ctx.translate(0, leafY + (dir>0?0:10*g));
+    ctx.rotate(dir*(0.78 + 0.14*Math.sin(t + L.sway)));
+    ctx.beginPath();
+    ctx.moveTo(0,0);
+    ctx.quadraticCurveTo(w*0.72,-hh,w,0);
+    ctx.quadraticCurveTo(w*0.72,hh,0,0);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+  leaf( 1,1.0);
+  leaf(-1,0.95);
+
+  // ไปที่หัวดอก
+  ctx.translate(0,-h);
+  ctx.rotate(L.bloomRot + Math.sin(t*0.55+L.sway)*0.08);
+
+  const R = L.size*(0.60 + 0.40*g);
+  const pal = palettes[L.pal];
+
+  // ถ้าเป็นดอกตูม
+  if(L.bud){
+    ctx.globalAlpha=0.95*g;
+    // กลีบหุ้มตูม (เขียวอ่อน)
+    const budGrad = ctx.createLinearGradient(0,0,0,-R*1.3);
+    budGrad.addColorStop(0,"rgba(170,210,140,1)");
+    budGrad.addColorStop(1,"rgba(120,175,110,1)");
+    ctx.fillStyle=budGrad;
+    ctx.beginPath();
+    ctx.ellipse(0, -R*0.25, R*0.38, R*0.95, 0, 0, Math.PI*2);
+    ctx.fill();
+    // ปลายตูมอมสีดอก
+    ctx.globalAlpha=0.65*g;
+    ctx.fillStyle=pal.p2;
+    ctx.beginPath();
+    ctx.ellipse(0, -R*0.75, R*0.22, R*0.32, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+    return;
+  }
+
+  // แสงนุ่มๆรอบดอก (ให้ดูเหมือนภาพถ่ายนิดๆ)
+  ctx.globalAlpha=(0.10 + L.depth*0.05)*g;
+  ctx.beginPath();
+  ctx.arc(0,-R*0.2, R*2.0, 0, Math.PI*2);
+  ctx.fillStyle="rgba(255,210,230,1)";
+  ctx.fill();
+  ctx.globalAlpha=1;
+
+  // กลีบ 6 กลีบ (อวบและยาวเหมือนลิลลี่จริง)
+  for(let i=0;i<6;i++){
+    ctx.save();
+    ctx.rotate(i*Math.PI/3);
+
+    ctx.globalAlpha=(0.92 - L.depth*0.05)*g;
+
+    // รูปกลีบ
+    ctx.beginPath();
+    ctx.moveTo(0,0);
+    ctx.quadraticCurveTo(R*0.55, -R*1.05, 0, -R*1.60);
+    ctx.quadraticCurveTo(-R*0.55, -R*1.05, 0, 0);
+    ctx.closePath();
+
+    // ไล่เฉด (ขาว/ชมพู/ม่วง)
+    const grad = ctx.createLinearGradient(0, 0, 0, -R*1.60);
+    grad.addColorStop(0, pal.p1);
+    grad.addColorStop(1, pal.p2);
+    ctx.fillStyle=grad;
+    ctx.fill();
+
+    // เส้นลายกลีบ (veins)
+    ctx.globalAlpha=0.55*g;
+    ctx.strokeStyle=pal.vein;
+    ctx.lineWidth=1.4;
+    for(let v=0; v<3; v++){
+      const off = (v-1)*R*0.12;
+      ctx.beginPath();
+      ctx.moveTo(off, -R*0.15);
+      ctx.quadraticCurveTo(off*0.6, -R*0.75, off*0.2, -R*1.35);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  // จุดบนกลีบ (เหมือนรูปถ่าย)
+  ctx.globalAlpha=0.45*g;
+  ctx.fillStyle="rgba(120,70,90,.65)";
+  for(let i=0;i<18;i++){
+    ctx.beginPath();
+    ctx.arc(
+      rand(-R*0.32, R*0.32),
+      rand(-R*0.55, -R*1.15),
+      1.35,
+      0,
+      Math.PI*2
+    );
+    ctx.fill();
+  }
+
+  // เกสร (ยาว + ปลายเหลือง/น้ำตาลนิดๆ)
+  ctx.globalAlpha=0.95*g;
+  for(let i=0;i<6;i++){
+    const a=i*Math.PI/3;
+    const sx=Math.cos(a)*R*0.10;
+    const sy=Math.sin(a)*R*0.10;
+
+    ctx.strokeStyle="rgba(245,230,160,.95)";
+    ctx.lineWidth=2;
+    ctx.beginPath();
+    ctx.moveTo(0,0);
+    ctx.quadraticCurveTo(sx, -R*0.45, sx*1.2, -R*0.95);
+    ctx.stroke();
+
+    ctx.fillStyle="rgba(155,90,80,.9)";
+    ctx.beginPath();
+    ctx.ellipse(sx*1.2, -R*0.98, 3.5, 2.6, a, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  // กลางดอกสีเหลือง
+  ctx.fillStyle="rgba(247,200,67,1)";
+  ctx.beginPath();
+  ctx.arc(0,0, R*0.10, 0, Math.PI*2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+/* ===== Loop ===== */
+let last=performance.now();
+let heartTimer=0;
+
+function loop(now){
+  const dt=Math.min(0.033,(now-last)/1000);
+  last=now;
+  const t=now/1000;
+
+  ctx.clearRect(0,0,W,H);
+
+  // vignette
+  const vg=ctx.createRadialGradient(W/2,H*0.55,0,W/2,H*0.55,Math.max(W,H)*0.72);
+  vg.addColorStop(0,"rgba(12,28,44,0)");
+  vg.addColorStop(1,"rgba(0,0,0,0.72)");
+  ctx.fillStyle=vg;
+  ctx.fillRect(0,0,W,H);
+
+  // stars
+  for(const s of stars){
+    const tw=0.7+0.3*Math.sin(t*s.sp+s.ph);
+    ctx.globalAlpha=s.a*tw;
+    ctx.beginPath();
+    ctx.arc(s.x*W,s.y*H,s.r,0,Math.PI*2);
+    ctx.fillStyle="#fff";
+    ctx.fill();
+  }
+  ctx.globalAlpha=1;
+
+  // fireflies (แสงจุดๆเหมือนในงานเดิม)
+  for(let i=0;i<12;i++){
+    const xx=W*0.5 + Math.sin(t*0.9+i)*190 + Math.sin(t*1.7+i*2)*40;
+    const yy=H*0.72 + Math.cos(t*1.1+i)*55 + i*3;
+    ctx.globalAlpha=0.06;
+    ctx.beginPath();
+    ctx.arc(xx,yy, 10 + 6*Math.sin(t+i), 0, Math.PI*2);
+    ctx.fillStyle="rgba(255,220,120,1)";
+    ctx.fill();
+  }
+  ctx.globalAlpha=1;
+
+  // bouquet base
+  drawFoliageBase(t);
+
+  // lilies
+  lilies.forEach(L=>drawLily(L,t));
+
+  // hearts auto
+  heartTimer+=dt;
+  while(heartTimer>0.28){
+    heartTimer-=0.28;
+    spawnHeart(rand(0,W),H+30);
+  }
+
+  // hearts draw
+  for(let i=hearts.length-1;i>=0;i--){
+    const h=hearts[i];
+    h.t+=dt;
+    h.x+=h.vx*60*dt;
+    h.y+=h.vy*60*dt;
+    const a=clamp(1-h.t/h.life,0,1);
+
+    // rings
+    ctx.globalAlpha=a*0.45;
+    ctx.lineWidth=3;
+    ctx.strokeStyle="rgba(90,255,170,1)";
+    ctx.beginPath();
+    ctx.arc(h.x,h.y,h.r1*(0.92+0.14*Math.sin(t*2+h.t)),0,Math.PI*2);
+    ctx.stroke();
+    if(h.r2){
+      ctx.globalAlpha=a*0.22;
+      ctx.lineWidth=2;
+      ctx.beginPath();
+      ctx.arc(h.x,h.y,h.r1*1.32,0,Math.PI*2);
+      ctx.stroke();
+    }
+
+    ctx.globalAlpha=a;
+    drawHeart(h,a);
+
+    if(h.t>h.life||h.y<-140)hearts.splice(i,1);
+  }
+  ctx.globalAlpha=1;
+
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+})();
+</script>
+
+</body>
+</html>
